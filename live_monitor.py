@@ -9,7 +9,8 @@ each packet, and checks them against the patterns already discovered by
 pattern_engine.py (stored in the `patterns` table) to flag packets that
 resemble a known architectural weakness pattern.
 
-Matches are logged to the packet_logs table via database.py.
+Matches are logged to the packet_logs table via database.py and 
+promoted to active patterns so they appear in graphs and reports.
 
 NOTE: Requires root/administrator privileges to sniff traffic.
 NOTE: This module is for detection/monitoring only — it inspects and
@@ -53,7 +54,7 @@ class LiveMonitor:
 
     def _extract_features(self, packet):
         """
-        Pulls the relevant IPv6/TCP header fields out of a packet.
+        Pull marshes relevant IPv6/TCP header fields out of a packet.
         Returns a dict, or None if the packet isn't IPv6.
         """
         if not packet.haslayer(IPv6):
@@ -101,7 +102,6 @@ class LiveMonitor:
             return "Neighbor Discovery | NDP anomaly", 0.6
 
         if features["has_tcp"] and "tcp_flags" in features:
-            # Example heuristic: unusual flag combos worth flagging for review
             suspicious_flag_combos = {"FPU", "SF", "SFR"}
             if features["tcp_flags"] in suspicious_flag_combos:
                 return "Transport Layer | Suspicious TCP flag combination", 0.5
@@ -138,8 +138,15 @@ class LiveMonitor:
                 confidence,
             )
 
+           
             self.db.insert_packet(record)
-            print(f"[MATCH] {timestamp} | {features['src_ip']} -> "
+            
+            
+            risk_score = confidence * 0.75
+            if hasattr(self.db, 'add_live_pattern'):
+                self.db.add_live_pattern(pattern_label, risk_score)
+
+            print(f"[NEW PATTERN MAPPED & SAVED] {timestamp} | {features['src_ip']} -> "
                   f"{features['dst_ip']} | {pattern_label} "
                   f"(confidence={confidence})")
 
